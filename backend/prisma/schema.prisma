@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// This model represents a Shopify store that uses our service.
+// It's the "Tenant" in "multi-tenant".
+model Store {
+  id          Int      @id @default(autoincrement())
+  shopDomain  String   @unique // "dev-coffee-house.myshopify.com"
+  accessToken String   // We need this to talk to Shopify's API if we wanted to.
+  
+  // A store can have many customers, orders, and products.
+  customers   Customer[]
+  orders      Order[]
+  products    Product[]
+  users       User[] 
+}
+
+model Customer {
+  id         String   @id // The ID from Shopify
+  email      String?
+  firstName  String?
+  lastName   String?
+  totalSpent Float    @default(0)
+
+  // This is the magic link! It connects a customer to a specific store.
+  storeId    Int
+  store      Store    @relation(fields: [storeId], references: [id])
+
+  orders     Order[]
+
+  // Ensures the same customer ID can't exist twice for the same store.
+  @@unique([id, storeId])
+}
+
+model Order {
+  id           String   @id // The ID from Shopify
+  totalPrice   Float
+  createdAt    DateTime
+
+  // Link to the customer who made the order
+  customerId   String
+  customer     Customer @relation(fields: [customerId, storeId], references: [id, storeId])
+
+  // This is the magic link! It connects an order to a specific store.
+  storeId      Int
+  store        Store    @relation(fields: [storeId], references: [id])
+}
+
+model Product {
+  id      String @id // The ID from Shopify
+  title   String
+
+  // This is the magic link! It connects a product to a specific store.
+  storeId Int
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  // Ensures the same product ID can't exist twice for the same store.
+  @@unique([id, storeId])
+}
+
+// A simple user model for our dashboard login.
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String // In a real app, this would be hashed!
+  storeId   Int      @unique // Each user belongs to one store
+  store     Store    @relation(fields: [storeId], references: [id])
+}
