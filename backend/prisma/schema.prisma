@@ -13,6 +13,7 @@ model Store {
   id          Int      @id @default(autoincrement())
   shopDomain  String   @unique // "dev-coffee-house.myshopify.com"
   accessToken String   // We need this to talk to Shopify's API if we wanted to.
+  apiToken    String? 
   
   // A store can have many customers, orders, and products.
   customers   Customer[]
