@@ -20,6 +20,7 @@ model Store {
   orders      Order[]
   products    Product[]
   users       User[] 
+  @@unique([id, storeId]) // <-- ADD THIS LINE
 }
 
 model Customer {
@@ -51,6 +52,7 @@ model Order {
   // This is the magic link! It connects an order to a specific store.
   storeId      Int
   store        Store    @relation(fields: [storeId], references: [id])
+  @@unique([id, storeId]) // <-- ADD THIS LINE
 }
 
 model Product {
