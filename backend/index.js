@@ -4,38 +4,6 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors'); // To allow our frontend to talk to our backend
 
-// --- Shopify Webhook Registration Helper ---
-const fetch = require('node-fetch');
-
-async function registerWebhook(shop, accessToken, topic, address) {
-  try {
-    const response = await fetch(`https://${shop}/admin/api/2025-07/webhooks.json`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': accessToken,
-      },
-      body: JSON.stringify({
-        webhook: {
-          topic: topic,
-          address: address,
-          format: 'json',
-        },
-      }),
-    });
-
-    const data = await response.json();
-    if (response.ok) {
-      console.log(`✅ Webhook registered for ${topic} → ${address}`);
-    } else {
-      console.error(`❌ Failed to register webhook for ${topic}`, data);
-    }
-  } catch (err) {
-    console.error('⚠️ Error registering webhook:', err);
-  }
-}
-
-
 // Create an instance of our tools
 const app = express();
 const prisma = new PrismaClient();
@@ -64,20 +32,14 @@ app.post('/webhooks/shopify', async (req, res) => {
         where: { shopDomain: shop },
     });
     if (!store) {
-    store = await prisma.store.create({
-        data: {
-            shopDomain: shop,
-            accessToken: process.env.SHOPIFY_API_SECRET || 'dummy-token',
-        },
-    });
-    console.log(`New store onboarded: ${shop}`);
-
-    // 🔔 Register webhooks for this store
-    await registerWebhook(shop, store.accessToken, 'customers/create', 'https://xeno-project-xjtn.onrender.com/webhooks/shopify');
-    await registerWebhook(shop, store.accessToken, 'customers/update', 'https://xeno-project-xjtn.onrender.com/webhooks/shopify');
-    await registerWebhook(shop, store.accessToken, 'orders/create', 'https://xeno-project-xjtn.onrender.com/webhooks/shopify');
-}
-
+        store = await prisma.store.create({
+            data: {
+                shopDomain: shop,
+                accessToken: 'dummy-token', // We don't need a real one for this setup
+            },
+        });
+        console.log(`New store onboarded: ${shop}`);
+    }
 
     // Now, we handle the data based on the event type ("topic")
     try {
