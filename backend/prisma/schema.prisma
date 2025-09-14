@@ -20,7 +20,7 @@ model Store {
   orders      Order[]
   products    Product[]
   users       User[] 
-  @@unique([id, storeId]) // <-- ADD THIS LINE
+  
 }
 
 model Customer {
