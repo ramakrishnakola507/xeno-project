@@ -203,6 +203,21 @@ app.get('/api/setup-test-user', jsonParser, async (req, res) => {
     }
 });
 
+// ✅ Add the root route here
+app.get('/', (req, res) => {
+  res.send(`
+    <h1>🚀 Xeno Insights Backend is Live</h1>
+    <p>Your Shopify app is running successfully on Render.</p>
+    <p>Available endpoints:</p>
+    <ul>
+      <li>POST /webhooks/shopify</li>
+      <li>POST /api/login</li>
+      <li>GET /api/stats/:storeId</li>
+      <li>GET /api/top-customers/:storeId</li>
+      <li>GET /api/setup-test-user</li>
+    </ul>
+  `);
+});
 
 // --- Part 5: Start the Server ---
 const PORT = process.env.PORT || 3001;
