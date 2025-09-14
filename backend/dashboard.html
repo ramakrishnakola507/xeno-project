@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xeno Insights Dashboard</title>
+    <!-- We are using Tailwind CSS for styling to make it look nice easily -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Using a nice font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s;
+        }
+        /* Simple transition for showing/hiding elements */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto">
+
+        <!-- Login Section -->
+        <div id="login-section" class="bg-white p-8 rounded-xl shadow-md max-w-md mx-auto fade-in">
+            <h1 class="text-2xl font-bold text-center mb-1 text-slate-900">Xeno Insights Login</h1>
+            <p class="text-slate-500 text-center mb-6">Access your Shopify store dashboard.</p>
+            <div id="login-error" class="text-red-500 text-sm mb-4 text-center min-h-[20px]"></div>
+            <div class="space-y-4">
+                <div>
+                    <label for="email" class="text-sm font-medium text-slate-600">Email</label>
+                    <input type="email" id="email" value="test@example.com" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="password" class="text-sm font-medium text-slate-600">Password</label>
+                    <input type="password" id="password" value="password123" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <button id="login-button" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 font-semibold transition-all duration-200">
+                    Login
+                </button>
+            </div>
+        </div>
+        
+        <!-- API Token Setup Section -->
+        <div id="api-setup-section" class="hidden bg-white p-8 rounded-xl shadow-md max-w-md mx-auto fade-in">
+            <h1 class="text-2xl font-bold text-center mb-1 text-slate-900">One-Time Setup</h1>
+            <p class="text-slate-500 text-center mb-6">Provide your Admin API token to begin syncing data.</p>
+            <div id="api-error" class="text-red-500 text-sm mb-4 text-center min-h-[20px]"></div>
+            <div class="space-y-4">
+                <div>
+                    <label for="api-token" class="text-sm font-medium text-slate-600">Admin API Access Token</label>
+                    <input type="text" id="api-token" placeholder="shpat_..." class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <button id="save-token-button" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 font-semibold transition-all duration-200">
+                    Save Token & Sync Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section" class="hidden w-full fade-in">
+             <div class="flex justify-between items-center mb-8">
+                <h1 class="text-3xl font-bold text-slate-900">Dashboard</h1>
+                <button id="logout-button" class="text-sm text-slate-600 hover:text-indigo-600 font-medium">Logout</button>
+             </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow">
+                    <h2 class="text-sm font-medium text-slate-500">Total Revenue</h2>
+                    <p id="total-revenue" class="text-3xl font-bold text-slate-900 mt-1">$0.00</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow">
+                    <h2 class="text-sm font-medium text-slate-500">Total Orders</h2>
+                    <p id="total-orders" class="text-3xl font-bold text-slate-900 mt-1">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow">
+                    <h2 class="text-sm font-medium text-slate-500">Total Customers</h2>
+                    <p id="total-customers" class="text-3xl font-bold text-slate-900 mt-1">0</p>
+                </div>
+            </div>
+
+            <!-- Top Customers -->
+            <div class="bg-white p-6 rounded-xl shadow">
+                <h2 class="text-lg font-semibold text-slate-800 mb-4">Top 5 Customers by Spend</h2>
+                <div id="top-customers-list" class="space-y-4">
+                    <p class="text-slate-500">No data available yet. Data syncs every 2 minutes. Please refresh soon.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- JAVASCRIPT LOGIC ---
+
+        // --- 1. CONFIGURATION ---
+        // IMPORTANT: Change this to your actual Render backend URL!
+        const API_BASE_URL = 'https://xeno-project-xjtn.onrender.com'; 
+
+        // --- 2. GETTING REFERENCES TO HTML ELEMENTS ---
+        const loginSection = document.getElementById('login-section');
+        const dashboardSection = document.getElementById('dashboard-section');
+        const apiSetupSection = document.getElementById('api-setup-section');
+        const loginButton = document.getElementById('login-button');
+        const saveTokenButton = document.getElementById('save-token-button');
+        const logoutButton = document.getElementById('logout-button');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const apiTokenInput = document.getElementById('api-token');
+        const loginError = document.getElementById('login-error');
+        const apiError = document.getElementById('api-error');
+
+        // --- 3. STATE MANAGEMENT ---
+        // We use sessionStorage to remember if the user is logged in between refreshes.
+        let storeId = sessionStorage.getItem('storeId');
+
+        // --- 4. CORE FUNCTIONS ---
+
+        // Function to handle the user clicking the "Login" button
+        async function handleLogin() {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            loginError.textContent = '';
+            loginButton.textContent = 'Logging in...';
+            loginButton.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // If login is successful, save the store ID and show the API setup screen.
+                    storeId = data.storeId;
+                    sessionStorage.setItem('storeId', storeId);
+                    showApiSetup();
+                } else {
+                    loginError.textContent = data.error || 'Login failed.';
+                }
+            } catch (error) {
+                loginError.textContent = 'Could not connect to the server.';
+                console.error('Login error:', error);
+            } finally {
+                loginButton.textContent = 'Login';
+                loginButton.disabled = false;
+            }
+        }
+        
+        // Function to handle saving the Admin API Token
+        async function handleSaveToken() {
+            const apiToken = apiTokenInput.value;
+            apiError.textContent = '';
+            
+            // Simple check to make sure the token looks like a real one
+            if (!apiToken.startsWith('shpat_')) {
+                apiError.textContent = 'Please enter a valid Admin API token.';
+                return;
+            }
+            
+            saveTokenButton.textContent = 'Saving...';
+            saveTokenButton.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/save-token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ storeId: parseInt(storeId), apiToken }),
+                });
+
+                if(response.ok) {
+                    // If token is saved successfully, show the main dashboard.
+                    showDashboard();
+                } else {
+                    const data = await response.json();
+                    apiError.textContent = data.error || 'Failed to save token.';
+                }
+            } catch (error) {
+                apiError.textContent = 'Could not connect to the server.';
+                console.error('Save token error:', error);
+            } finally {
+                saveTokenButton.textContent = 'Save Token & Sync Data';
+                saveTokenButton.disabled = false;
+            }
+        }
+        
+        // Function to handle logging out
+        function handleLogout() {
+            sessionStorage.removeItem('storeId');
+            storeId = null;
+            showLogin();
+        }
+
+        // --- 5. UI DISPLAY FUNCTIONS ---
+
+        function showLogin() {
+            loginSection.classList.remove('hidden');
+            apiSetupSection.classList.add('hidden');
+            dashboardSection.classList.add('hidden');
+        }
+
+        function showApiSetup() {
+            loginSection.classList.add('hidden');
+            apiSetupSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+        }
+
+        async function showDashboard() {
+            loginSection.classList.add('hidden');
+            apiSetupSection.classList.add('hidden');
+            dashboardSection.classList.remove('hidden');
+            fetchDashboardData(); // Immediately fetch data when showing the dashboard
+        }
+        
+        // Function to get all the data from our backend and update the dashboard
+        async function fetchDashboardData() {
+            if (!storeId) return;
+
+            // Fetch main stats (Revenue, Orders, Customers)
+            try {
+                const statsRes = await fetch(`${API_BASE_URL}/api/stats/${storeId}`);
+                const statsData = await statsRes.json();
+                document.getElementById('total-revenue').textContent = `$${statsData.totalRevenue.toFixed(2)}`;
+                document.getElementById('total-orders').textContent = statsData.totalOrders;
+                document.getElementById('total-customers').textContent = statsData.totalCustomers;
+            } catch (error) {
+                console.error("Failed to fetch stats:", error);
+            }
+
+            // Fetch top 5 customers
+            try {
+                const customersRes = await fetch(`${API_BASE_URL}/api/top-customers/${storeId}`);
+                const customersData = await customersRes.json();
+                const customersList = document.getElementById('top-customers-list');
+                customersList.innerHTML = ''; // Clear loading/old text
+
+                if (customersData.length === 0) {
+                    customersList.innerHTML = '<p class="text-slate-500">No customer data available yet. Data syncs every 2 minutes. Please refresh soon.</p>';
+                    return;
+                }
+
+                customersData.forEach(customer => {
+                    const customerDiv = document.createElement('div');
+                    customerDiv.className = 'flex justify-between items-center border-b border-slate-100 pb-2';
+                    customerDiv.innerHTML = `
+                        <p class="font-medium text-slate-700">${customer.name}</p>
+                        <p class="text-slate-500 font-semibold">$${customer.total.toFixed(2)}</p>
+                    `;
+                    customersList.appendChild(customerDiv);
+                });
+            } catch (error) {
+                console.error("Failed to fetch top customers:", error);
+                customersList.innerHTML = '<p class="text-red-500">Could not load customer data.</p>';
+            }
+        }
+
+        // --- 6. INITIALIZATION ---
+
+        // Check if user is already logged in when the page loads
+        if (storeId) {
+            showDashboard();
+        } else {
+            showLogin();
+        }
+
+        // Add event listeners to all the buttons
+        loginButton.addEventListener('click', handleLogin);
+        saveTokenButton.addEventListener('click', handleSaveToken);
+        logoutButton.addEventListener('click', handleLogout);
+        
+        // Allow pressing Enter to submit forms
+        passwordInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') handleLogin();
+        });
+        apiTokenInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') handleSaveToken();
+        });
+
+    </script>
+</body>
+</html>
