@@ -3,7 +3,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors');
 const cron = require('node-cron');
-const fetch = require('node-fetch@2'); // Use specific version for compatibility
+const fetch = require('node-fetch'); // Use specific version for compatibility
 
 const app = express();
 const prisma = new PrismaClient();
