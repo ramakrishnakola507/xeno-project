@@ -1,38 +1,35 @@
 // --- Part 1: Setup and Initialization ---
-// We are importing all the tools we need.
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const cors = require('cors'); // Allows our frontend to talk to our backend
-const cron = require('node-cron'); // The library that lets us schedule tasks
-const fetch = require('node-fetch'); // A tool to make API calls to Shopify
+const cors = require('cors');
+const cron = require('node-cron');
+const fetch = require('node-fetch@2'); // Use specific version for compatibility
 
-// Create an instance of our tools
 const app = express();
 const prisma = new PrismaClient();
 
-// --- Part 2: Middlewares ---
-// These are functions that run on every request.
-app.use(cors()); // Allow requests from any origin (for simplicity)
-app.use(express.json()); // Use the standard JSON parser to understand incoming data
+// --- Part 2: Middlewares (ORDER IS IMPORTANT) ---
+// This must come BEFORE any of your API routes to work correctly.
+app.use(cors());
+app.use(express.json());
 
-// --- Part 3: API Endpoints for our Frontend Dashboard ---
-// These are the addresses our frontend will call to get data or save settings.
+// --- Part 3: API Endpoints for our Frontend ---
 
-// Endpoint 1: Login for the user (this code has not changed)
+// 1. Login Endpoint
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ error: 'Email and password required' });
     }
     const user = await prisma.user.findUnique({ where: { email } });
-    if (user && user.password === password) { // Simple password check
+    if (user && user.password === password) {
         res.json({ message: 'Login successful', storeId: user.storeId });
     } else {
         res.status(401).json({ error: 'Invalid credentials' });
     }
 });
 
-// Endpoint 2: A NEW endpoint for the dashboard to save the Shopify API Token
+// 2. Endpoint to SAVE the API Token from the dashboard
 app.post('/api/save-token', async (req, res) => {
     const { storeId, apiToken } = req.body;
     if (!storeId || !apiToken) {
@@ -41,7 +38,7 @@ app.post('/api/save-token', async (req, res) => {
     try {
         await prisma.store.update({
             where: { id: parseInt(storeId) },
-            data: { apiToken: apiToken }, // Save the token to the database
+            data: { apiToken: apiToken },
         });
         res.json({ message: 'API Token saved successfully!' });
     } catch (error) {
@@ -50,10 +47,10 @@ app.post('/api/save-token', async (req, res) => {
     }
 });
 
-
-// Endpoint 3: Get main dashboard stats (this code has not changed)
+// 3. Main dashboard stats
 app.get('/api/stats/:storeId', async (req, res) => {
     const storeId = parseInt(req.params.storeId);
+    // ... (rest of the code is the same)
     const totalCustomers = await prisma.customer.count({ where: { storeId } });
     const totalOrders = await prisma.order.count({ where: { storeId } });
     const totalRevenue = await prisma.order.aggregate({
@@ -67,40 +64,82 @@ app.get('/api/stats/:storeId', async (req, res) => {
     });
 });
 
-// Endpoint 4: Get top 5 customers (this code has not changed)
+// 4. Top 5 customers
 app.get('/api/top-customers/:storeId', async (req, res) => {
     const storeId = parseInt(req.params.storeId);
+    // ... (rest of the code is the same)
     const orders = await prisma.order.findMany({
         where: { storeId },
         include: { customer: true },
     });
     const customerSpend = {};
     orders.forEach(order => {
-        if (!order.customer) return; // Skip if customer is null
-        if (!customerSpend[order.customerId]) {
-            customerSpend[order.customerId] = {
-                name: `${order.customer.firstName || ''} ${order.customer.lastName || ''}`.trim() || order.customer.email,
-                total: 0,
-            };
+        if (order.customer) { // Safety check
+            if (!customerSpend[order.customerId]) {
+                customerSpend[order.customerId] = {
+                    name: `${order.customer.firstName || ''} ${order.customer.lastName || ''}`.trim() || order.customer.email,
+                    total: 0,
+                };
+            }
+            customerSpend[order.customerId].total += order.totalPrice;
         }
-        customerSpend[order.customerId].total += order.totalPrice;
     });
     const sortedCustomers = Object.values(customerSpend).sort((a, b) => b.total - a.total).slice(0, 5);
     res.json(sortedCustomers);
 });
 
-// Endpoint 5: Setup a test user for the dashboard (make sure the domain is correct!)
+// 5. Orders by Date Endpoint
+app.get('/api/orders-by-date/:storeId', async (req, res) => {
+    const storeId = parseInt(req.params.storeId);
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'Start date and end date are required.' });
+    }
+
+    try {
+        const orders = await prisma.order.findMany({
+            where: {
+                storeId: storeId,
+                createdAt: {
+                    gte: new Date(startDate),
+                    lte: new Date(endDate),
+                },
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        const dailyData = {};
+        orders.forEach(order => {
+            const date = order.createdAt.toISOString().split('T')[0];
+            if (!dailyData[date]) {
+                dailyData[date] = { date, orders: 0, revenue: 0 };
+            }
+            dailyData[date].orders += 1;
+            dailyData[date].revenue = parseFloat((dailyData[date].revenue + order.totalPrice).toFixed(2));
+        });
+        
+        const chartData = Object.values(dailyData).sort((a, b) => new Date(a.date) - new Date(b.date));
+        res.json(chartData);
+
+    } catch (error) {
+        console.error("Error fetching orders by date:", error);
+        res.status(500).json({ error: 'Failed to fetch data.' });
+    }
+});
+
+
+// 6. Test user setup
 app.get('/api/setup-test-user', async (req, res) => {
     try {
-        // IMPORTANT: Change this domain to match your Shopify development store's domain!
-        const shopDomain = 'ramakrishna-demo.myshopify.com'; 
+        const shopDomain = 'ramakrishna-demo.myshopify.com';
         let store = await prisma.store.findUnique({ where: { shopDomain } });
         if (!store) {
-            store = await prisma.store.create({ data: { shopDomain, accessToken: 'dummy' } });
+            store = await prisma.store.create({ data: { shopDomain, accessToken: 'dummy-token' } });
         }
         const user = await prisma.user.upsert({
             where: { email: 'test@example.com' },
-            update: {},
+            update: { storeId: store.id },
             create: { email: 'test@example.com', password: 'password123', storeId: store.id },
         });
         res.json({ message: 'Test user ready!', user });
@@ -109,65 +148,55 @@ app.get('/api/setup-test-user', async (req, res) => {
     }
 });
 
-// --- Part 4: The Scheduler (This is the new Data Ingestion engine) ---
-
-// This is the main function that will pull data from Shopify
+// --- Part 4: The Scheduler (Data Ingestion) ---
 async function syncShopifyData() {
     console.log('Scheduler running: Starting data sync...');
-    
-    // 1. Find all stores in our database that have given us an API token.
+    // ... (rest of the code is the same)
     const stores = await prisma.store.findMany({
         where: { apiToken: { not: null } },
     });
 
-    // 2. Loop through each store and fetch its data.
     for (const store of stores) {
         console.log(`Syncing data for ${store.shopDomain}`);
         const headers = { 'X-Shopify-Access-Token': store.apiToken };
         
         try {
-            // 3. Make an API call to Shopify to get the latest 50 orders.
-            const ordersResponse = await fetch(`https://${store.shopDomain}/admin/api/2025-07/orders.json?limit=50`, { headers });
+            const ordersResponse = await fetch(`https://${store.shopDomain}/admin/api/2025-07/orders.json`, { headers });
             const { orders } = await ordersResponse.json();
 
-            if (orders && orders.length > 0) {
-                // 4. For each order we receive, save it (and its customer) to our database.
+            if (orders) {
                 for (const order of orders) {
-                    if (!order.customer) continue; // Skip orders with no customer
-                    
-                    // First, make sure the customer exists in our DB.
-                    await prisma.customer.upsert({
-                        where: { id_storeId: { id: String(order.customer.id), storeId: store.id } },
-                        update: { // Update details if they have changed
-                            email: order.customer.email,
-                            firstName: order.customer.first_name,
-                            lastName: order.customer.last_name,
-                        },
-                        create: { // Create the customer if they are new
-                            id: String(order.customer.id),
-                            email: order.customer.email,
-                            firstName: order.customer.first_name,
-                            lastName: order.customer.last_name,
-                            storeId: store.id,
-                        },
-                    });
-                    
-                    // Now, save the order itself.
-                    await prisma.order.upsert({
-                        where: { id_storeId: { id: String(order.id), storeId: store.id } },
-                        update: { totalPrice: parseFloat(order.total_price) },
-                        create: {
-                            id: String(order.id),
-                            totalPrice: parseFloat(order.total_price),
-                            createdAt: new Date(order.created_at),
-                            storeId: store.id,
-                            customerId: String(order.customer.id),
-                        },
-                    });
+                    if (order.customer) { // Safety check
+                        await prisma.customer.upsert({
+                            where: { id_storeId: { id: String(order.customer.id), storeId: store.id } },
+                            update: {
+                                email: order.customer.email,
+                                firstName: order.customer.first_name,
+                                lastName: order.customer.last_name,
+                            },
+                            create: {
+                                id: String(order.customer.id),
+                                email: order.customer.email,
+                                firstName: order.customer.first_name,
+                                lastName: order.customer.last_name,
+                                storeId: store.id,
+                            },
+                        });
+                        
+                        await prisma.order.upsert({
+                            where: { id_storeId: { id: String(order.id), storeId: store.id } },
+                            update: { totalPrice: parseFloat(order.total_price) },
+                            create: {
+                                id: String(order.id),
+                                totalPrice: parseFloat(order.total_price),
+                                createdAt: new Date(order.created_at),
+                                storeId: store.id,
+                                customerId: String(order.customer.id),
+                            },
+                        });
+                    }
                 }
                 console.log(`Synced ${orders.length} orders for ${store.shopDomain}`);
-            } else {
-                console.log(`No new orders to sync for ${store.shopDomain}`);
             }
         } catch (error) {
             console.error(`Error syncing data for ${store.shopDomain}:`, error);
@@ -176,14 +205,13 @@ async function syncShopifyData() {
      console.log('Scheduler finished.');
 }
 
-// This line tells our server to run the 'syncShopifyData' function every 2 minutes.
-// The syntax '*/2 * * * *' is called "cron syntax".
+// Schedules the sync to run every 2 minutes.
 cron.schedule('*/2 * * * *', syncShopifyData);
-
 
 // --- Part 5: Start the Server ---
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    console.log('Scheduler is active. Data sync will run every 2 minutes.');
+    console.log(`Server is running on port ${PORT}`);
+    console.log('Scheduler is active. First data sync will run on the next cycle.');
 });
+
